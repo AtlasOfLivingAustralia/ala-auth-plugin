@@ -6,6 +6,13 @@ userDetails {
     readTimeout = 0 // disable read timeouts for user details because some services are slooooow...
 }
 security {
+    oidc {
+        enabled = false
+        clientId = 'ChangeMe'
+        secret = 'ChangeMe'
+        discoveryUri = 'https://auth.ala.org.au/cas/oidc/.well-known'
+        scope = 'openid profile email ala roles'
+    }
     cas {
         appServerName = null
         casServerName = 'https://auth.ala.org.au'
@@ -31,21 +38,22 @@ security {
     }
 }
 
-grails {
-    cache {
-        config {
-            defaults {
-                eternal = false
-                overflowToDisk = false
-                maxElementsInMemory = 20000
-                timeToLiveSeconds = 3600
-            }
-            cache{
-                name = 'userListCache'
-            }
-            cache {
-                name = 'userMapCache'
-            }
-        }
-    }
-}
+// TODO Document caches
+//grails {
+//    cache {
+//        config {
+//            defaults {
+//                eternal = false
+//                overflowToDisk = false
+//                maxElementsInMemory = 20000
+//                timeToLiveSeconds = 3600
+//            }
+//            cache {
+//                name = 'userListCache'
+//            }
+//            cache {
+//                name = 'userMapCache'
+//            }
+//        }
+//    }
+//}

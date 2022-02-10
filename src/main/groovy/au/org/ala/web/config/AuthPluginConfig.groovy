@@ -1,23 +1,22 @@
 package au.org.ala.web.config
 
 import au.org.ala.userdetails.UserDetailsClient
+import au.org.ala.web.CasAuthService
 import au.org.ala.web.CasClientProperties
 import au.org.ala.web.CasContextParamInitializer
+import au.org.ala.web.CasSSOStrategy
 import au.org.ala.web.CookieFilterWrapper
 import au.org.ala.web.CooperatingFilterWrapper
+import au.org.ala.web.IAuthService
 import au.org.ala.web.RegexListUrlPatternMatcherStrategy
+import au.org.ala.web.SSOStrategy
 import au.org.ala.web.UriExclusionFilter
 import au.org.ala.web.UserAgentBypassFilterWrapper
 import au.org.ala.web.UserAgentFilterService
-import com.squareup.moshi.Moshi
-import com.squareup.moshi.Rfc3339DateJsonAdapter
 import grails.core.GrailsApplication
 import grails.util.Metadata
-import groovy.json.JsonSlurper
-import groovy.transform.CompileDynamic
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import okhttp3.OkHttpClient
 import org.jasig.cas.client.authentication.AuthenticationFilter
 import org.jasig.cas.client.authentication.DefaultGatewayResolverImpl
 import org.jasig.cas.client.authentication.GatewayResolver
@@ -27,7 +26,6 @@ import org.jasig.cas.client.session.SingleSignOutFilter
 import org.jasig.cas.client.util.HttpServletRequestWrapperFilter
 import org.jasig.cas.client.validation.Cas30ProxyReceivingTicketValidationFilter
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -39,9 +37,6 @@ import org.springframework.util.AntPathMatcher
 
 import javax.servlet.DispatcherType
 import javax.servlet.Filter
-import java.util.regex.Pattern
-
-import static java.util.concurrent.TimeUnit.MILLISECONDS
 
 @CompileStatic
 @Configuration("alaAuthPluginConfiguration")
@@ -57,46 +52,19 @@ class AuthPluginConfig {
     @Autowired
     GrailsApplication grailsApplication
 
-    @ConditionalOnMissingBean(name = "userDetailsHttpClient")
-    @Bean(name = ["defaultUserDetailsHttpClient", "userDetailsHttpClient"])
-    OkHttpClient userDetailsHttpClient(GrailsApplication grailsApplication) {
-        Integer readTimeout = grailsApplication.config['userDetails']['readTimeout'] as Integer
-        new OkHttpClient.Builder().readTimeout(readTimeout, MILLISECONDS).build()
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
+    @Bean
+    IAuthService delegateService(UserDetailsClient userDetailsClient) {
+        new CasAuthService(userDetailsClient, casClientProperties.bypass)
     }
 
-    @ConditionalOnMissingBean(name = "userDetailsMoshi")
-    @Bean(name = ["defaultUserDetailsMoshi", "userDetailsMoshi"])
-    Moshi userDetailsMoshi() {
-        new Moshi.Builder().add(Date, new Rfc3339DateJsonAdapter().nullSafe()).build()
-    }
-
-
-    @Bean("userDetailsClient")
-    UserDetailsClient userDetailsClient(@Qualifier("userDetailsHttpClient") OkHttpClient userDetailsHttpClient,
-                                        @Qualifier('userDetailsMoshi') Moshi moshi,
-                                        GrailsApplication grailsApplication) {
-        String baseUrl = grailsApplication.config["userDetails"]["url"]
-        new UserDetailsClient.Builder(userDetailsHttpClient, baseUrl).moshi(moshi).build()
-    }
-
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
     CasContextParamInitializer casContextParamInitializer() {
         new CasContextParamInitializer(casClientProperties)
     }
 
-    @ConditionalOnMissingBean(name = "crawlerPatterns")
-    @Bean
-    @CompileDynamic
-    List<Pattern> crawlerPatterns() {
-        List crawlerUserAgents = new JsonSlurper().parse(this.class.classLoader.getResource('crawler-user-agents.json'))
-        return crawlerUserAgents*.pattern.collect { Pattern.compile(it) }
-    }
-
-    @Bean
-    UserAgentFilterService userAgentFilterService() {
-        return new UserAgentFilterService('', crawlerPatterns())
-    }
-
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean("ignoreUrlPatternMatcherStrategy")
     UrlPatternMatcherStrategy ignoreUrlPatternMatcherStrategy() {
         def strat = new RegexListUrlPatternMatcherStrategy()
@@ -104,6 +72,7 @@ class AuthPluginConfig {
         return strat
     }
 
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @ConditionalOnMissingBean(name = 'gatewayResolver')
     @Bean('gatewayResolver')
     GatewayResolver gatewayResolver() {
@@ -129,6 +98,7 @@ class AuthPluginConfig {
         }
     }
 
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
     FilterRegistrationBean casSSOFilter() {
         def frb = new FilterRegistrationBean()
@@ -170,11 +140,11 @@ class AuthPluginConfig {
 
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
-    FilterRegistrationBean casAuthGatewayFilter() {
+    FilterRegistrationBean casAuthGatewayFilter(UserAgentFilterService userAgentFilterService) {
         final name = 'CAS Gateway Authentication Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        frb.filter = new CooperatingFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService()), AUTH_FILTER_KEY)
+        frb.filter = new CooperatingFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService), AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = filterOrder() + 2
         frb.urlPatterns =  casClientProperties.gatewayFilterPattern
@@ -204,11 +174,11 @@ class AuthPluginConfig {
 
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
-    FilterRegistrationBean casAuthCookieGatewayFilter() {
+    FilterRegistrationBean casAuthCookieGatewayFilter(UserAgentFilterService userAgentFilterService) {
         final name = 'CAS Gateway Cookie Authentication Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService()), casClientProperties.authCookieName), AUTH_FILTER_KEY)
+        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService), casClientProperties.authCookieName), AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = filterOrder() + 4
         frb.urlPatterns = casClientProperties.gatewayIfCookieFilterPattern
@@ -234,7 +204,7 @@ class AuthPluginConfig {
         return frb
     }
 
-
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
     FilterRegistrationBean casHttpServletRequestWrapperFilter() {
         FilterRegistrationBean frb = new FilterRegistrationBean()
@@ -247,6 +217,23 @@ class AuthPluginConfig {
         frb.initParameters = [:]
         log.debug('CAS HttpServletRequest Wrapper Filter enabled')
         return frb
+    }
+
+    @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
+    @Bean
+    SSOStrategy ssoStrategy(UserAgentFilterService userAgentFilterService) {
+        new CasSSOStrategy(
+                casClientProperties.service,
+                casClientProperties.appServerName,
+                casClientProperties.loginUrl,
+                casClientProperties.authCookieName,
+                casClientProperties.encodeServiceUrl,
+                casClientProperties.enabled,
+                casClientProperties.renew,
+                ignoreUrlPatternMatcherStrategy(),
+                userAgentFilterService,
+                gatewayResolver()
+        )
     }
 
     // nb this would be nicer if we could use the Spring Boot Configuration Property classes but these seem to cause

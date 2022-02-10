@@ -1,81 +1,45 @@
 package au.org.ala.web
 
-import au.org.ala.cas.util.AuthenticationUtils
 import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.userdetails.UserDetailsFromIdListRequest
 import grails.plugin.cache.Cacheable
-import org.springframework.web.context.request.RequestContextHolder
 
-import javax.servlet.http.HttpServletRequest
-
-class AuthService {
+class AuthService implements IAuthService {
 
     static transactional = false
 
     def grailsApplication
     def userListService
     UserDetailsClient userDetailsClient
+    // Delegate the auth service implementation to one for our auth config
+    IAuthService delegateService
 
-    def getEmail() {
-        return AuthenticationUtils.getEmailAddress(RequestContextHolder.currentRequestAttributes().getRequest())
+    String getEmail() {
+        delegateService.getEmail()
     }
 
-    def getUserId() {
-        def request = RequestContextHolder.currentRequestAttributes().getRequest() as HttpServletRequest
-        def userId = AuthenticationUtils.getUserId(request)
-        if (!userId) {
-            // try the email address, and working backwards from there
-            def emailAddress = AuthenticationUtils.getEmailAddress(request)
-            if (emailAddress) {
-                def user = getUserForEmailAddress(emailAddress)
-                if (user) {
-                    userId = user.userId
-                }
-            }
-        }
-        return userId
+    String getUserId() {
+        delegateService.getUserId()
     }
 
-    def getDisplayName() {
-        return AuthenticationUtils.getDisplayName(RequestContextHolder.currentRequestAttributes().getRequest())
+    String getDisplayName() {
+        delegateService.getDisplayName()
     }
 
-    def getFirstName() {
-        return AuthenticationUtils.getFirstName(RequestContextHolder.currentRequestAttributes().getRequest())
+    String getFirstName() {
+        delegateService.getFirstName()
     }
 
-    def getLastName() {
-        return AuthenticationUtils.getLastName(RequestContextHolder.currentRequestAttributes().getRequest())
+    String getLastName() {
+        delegateService.getLastName()
     }
 
-    boolean userInRole(role) {
-
-        def inRole = AuthenticationUtils.isUserInRole(RequestContextHolder.currentRequestAttributes().getRequest(), role)
-        def bypass = grailsApplication.config.security.cas.bypass
-        log.debug("userInRole(${role}) - ${inRole} (bypassing CAS - ${bypass})")
-        return bypass.toString().toBoolean() || inRole
+    boolean userInRole(String role) {
+        delegateService.userInRole(role)
     }
 
     UserDetails userDetails() {
-        def attr = RequestContextHolder.currentRequestAttributes()?.getUserPrincipal()?.attributes
-        def details = null
-
-        if (attr) {
-            details = new UserDetails(
-                userId:attr?.userid?.toString(),
-                userName: attr?.email?.toString()?.toLowerCase(),
-                firstName: attr?.firstname?.toString() ?: "",
-                lastName: attr?.lastname?.toString() ?: "",
-                locked: attr?.locked?.toBoolean() ?: false,
-                organisation: attr?.organisation?.toString() ?: "",
-                city: attr?.country?.toString() ?: "",
-                state: attr?.state?.toString() ?: "",
-                country: attr?.country?.toString() ?: "",
-                roles: AuthenticationUtils.getUserRoles(RequestContextHolder.currentRequestAttributes().request)
-            )
-        }
-
-        details
+        delegateService.userDetails()
     }
 
     @Cacheable("userDetailsCache")
