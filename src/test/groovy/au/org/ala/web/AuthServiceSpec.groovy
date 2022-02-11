@@ -2,12 +2,12 @@ package au.org.ala.web
 
 import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.userdetails.UserDetailsFromIdListResponse
-import grails.test.mixin.*
+import grails.testing.services.ServiceUnitTest
 import retrofit2.mock.Calls
 import spock.lang.Specification
 
-@TestFor(AuthService)
-class AuthServiceSpec extends Specification {
+
+class AuthServiceSpec extends Specification implements ServiceUnitTest<AuthService> {
 
     def setup() {
         grailsApplication.config.userDetails.url = 'http://auth.ala.org.au/userdetails/'
