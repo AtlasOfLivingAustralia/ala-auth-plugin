@@ -7,6 +7,7 @@ import org.pac4j.core.context.session.JEESessionStore
 import org.pac4j.core.context.session.SessionStore
 import org.pac4j.core.engine.DefaultSecurityLogic
 import org.pac4j.core.engine.SecurityLogic
+import org.pac4j.core.engine.savedrequest.DefaultSavedRequestHandler
 import org.pac4j.core.http.adapter.HttpActionAdapter
 import org.pac4j.core.http.adapter.JEEHttpActionAdapter
 import org.pac4j.core.util.FindBest
@@ -41,10 +42,19 @@ class Pac4jSSOStrategy implements SSOStrategy {
 
     @Override
     boolean authenticate(HttpServletRequest request, HttpServletResponse response, boolean gateway) {
+        authenticate(request, response, gateway, null)
+    }
+
+    @Override
+    boolean authenticate(HttpServletRequest request, HttpServletResponse response, boolean gateway, String redirectUri) {
 
         final SessionStore bestSessionStore = FindBest.sessionStore(null, config, JEESessionStore.INSTANCE)
         final HttpActionAdapter bestAdapter = FindBest.httpActionAdapter(null, config, JEEHttpActionAdapter.INSTANCE)
         final SecurityLogic bestLogic = FindBest.securityLogic(securityLogic, config, DefaultSecurityLogic.INSTANCE)
+
+        if (bestLogic instanceof DefaultSecurityLogic) {
+            bestLogic.savedRequestHandler = new OverrideSavedRequestHandler(redirectUri: redirectUri)
+        }
 
         final WebContext context = FindBest.webContextFactory(null, config, JEEContextFactory.INSTANCE).newContext(request, response)
 
@@ -55,5 +65,14 @@ class Pac4jSSOStrategy implements SSOStrategy {
             result = false
         }, bestAdapter, gateway ? gatewayClients : clients, gateway ? gatewayAuthorizers : authorizers, matchers);
         return result
+    }
+
+    static class OverrideSavedRequestHandler extends DefaultSavedRequestHandler {
+
+        String redirectUri
+
+        protected String getRequestedUrl(final WebContext context, final SessionStore sessionStore) {
+            return redirectUri ?: context.getFullRequestURL()
+        }
     }
 }

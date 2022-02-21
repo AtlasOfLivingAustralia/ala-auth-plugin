@@ -1,6 +1,7 @@
 package au.org.ala.web
 
 import groovy.util.logging.Slf4j
+import org.grails.web.servlet.mvc.GrailsWebRequest
 import org.jasig.cas.client.Protocol
 import org.jasig.cas.client.authentication.AuthenticationFilter
 import org.jasig.cas.client.authentication.AuthenticationRedirectStrategy
@@ -57,6 +58,11 @@ class CasSSOStrategy implements SSOStrategy {
 
     @Override
     boolean authenticate(HttpServletRequest request, HttpServletResponse response, boolean gateway) {
+        authenticate(request, response, gateway, null)
+    }
+
+    @Override
+    boolean authenticate(HttpServletRequest request, HttpServletResponse response, boolean gateway, String redirectUri) {
         if (isRequestUrlExcluded(request)) {
             log.debug("Request is ignored.")
             return true
@@ -66,11 +72,12 @@ class CasSSOStrategy implements SSOStrategy {
         final Assertion assertion = session != null ? (Assertion) session.getAttribute(AuthenticationFilter.CONST_CAS_ASSERTION) : null
 
         if (assertion != null) {
-            log.debug("{}.{}.{} request already authenticated", controllerNamespace, controllerName, actionName)
+            def gwr = GrailsWebRequest.lookup(request)
+            log.debug("{}.{}.{} request already authenticated", gwr?.controllerNamespace, gwr?.controllerName, gwr?.actionName)
             return true
         }
 
-        final String serviceUrl = constructServiceUrl(request, response)
+        final String serviceUrl = constructServiceUrl(request, response, redirectUri)
         final String ticket = retrieveTicketFromRequest(request)
         final boolean wasGatewayed = gateway && this.gatewayStorage.hasGatewayedAlready(request, serviceUrl)
 
@@ -99,8 +106,8 @@ class CasSSOStrategy implements SSOStrategy {
         return false
     }
 
-    protected final String constructServiceUrl(final HttpServletRequest request, final HttpServletResponse response) {
-        return CommonUtils.constructServiceUrl(request, response, this.service, this.serverName,
+    protected final String constructServiceUrl(final HttpServletRequest request, final HttpServletResponse response, final String redirectUri) {
+        return CommonUtils.constructServiceUrl(request, response, redirectUri ?: this.service, this.serverName,
                 this.protocol.getServiceParameterName(),
                 this.protocol.getArtifactParameterName(), this.encodeServiceUrl)
     }
