@@ -83,6 +83,8 @@ dependencies {
 
     compile 'au.org.ala:ala-cas-client:2.5'
 
+    implementation 'au.org.ala.grails:interceptor-annotation-matcher:1.0.0-SNAPSHOT'
+
     compile 'org.pac4j:pac4j-oidc:5.3.0'
     compile 'org.pac4j:pac4j-jee:5.3.0'
 //    compile 'org.pac4j:jee-pac4j:5.3.0'
@@ -166,19 +168,6 @@ publishing {
                     url = 'https://github.com/AtlasOfLivingAustralia/ala-auth-plugin/tree/main'
                 }
             }
-//            pom.withXml {
-//                def pomNode = asNode()
-//                pomNode.dependencyManagement.replaceNode {}
-//
-//                // simply remove dependencies without a version
-//                // version-less dependencies are handled with dependencyManagement
-//                // see https://github.com/spring-gradle-plugins/dependency-management-plugin/issues/8 for more complete solutions
-//                pomNode.dependencies.dependency.findAll {
-//                    it.version.text().isEmpty()
-//                }.each {
-//                    it.replaceNode {}
-//                }
-//            }
 
         }
     }
