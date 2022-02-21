@@ -111,7 +111,7 @@ class Pac4jAuthService implements IAuthService {
 
     /**
      *
-     * @param request Needs to be a {@link au.org.ala.cas.client.AlaHttpServletRequestWrapperFilter} or {@link org.jasig.cas.client.util.HttpServletRequestWrapperFilter}
+     * @param request Needs to be a {@link org.pac4j.jee.util.Pac4JHttpServletRequestWrapper}
      * @return The users roles in a set or an empty set if the user is not authenticated
      */
     Set<String> getUserRoles() {
