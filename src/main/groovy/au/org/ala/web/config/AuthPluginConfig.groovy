@@ -7,6 +7,7 @@ import au.org.ala.web.CasContextParamInitializer
 import au.org.ala.web.CasSSOStrategy
 import au.org.ala.web.CookieFilterWrapper
 import au.org.ala.web.CooperatingFilterWrapper
+import au.org.ala.web.CoreAuthProperties
 import au.org.ala.web.IAuthService
 import au.org.ala.web.RegexListUrlPatternMatcherStrategy
 import au.org.ala.web.SSOStrategy
@@ -40,7 +41,7 @@ import javax.servlet.Filter
 
 @CompileStatic
 @Configuration("alaAuthPluginConfiguration")
-@EnableConfigurationProperties(CasClientProperties)
+@EnableConfigurationProperties([CasClientProperties, CoreAuthProperties])
 @Slf4j
 class AuthPluginConfig {
 
@@ -48,6 +49,8 @@ class AuthPluginConfig {
 
     @Autowired
     CasClientProperties casClientProperties
+    @Autowired
+    CoreAuthProperties coreAuthProperties
 
     @Autowired
     GrailsApplication grailsApplication
@@ -61,14 +64,14 @@ class AuthPluginConfig {
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
     CasContextParamInitializer casContextParamInitializer() {
-        new CasContextParamInitializer(casClientProperties)
+        new CasContextParamInitializer(coreAuthProperties, casClientProperties)
     }
 
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean("ignoreUrlPatternMatcherStrategy")
     UrlPatternMatcherStrategy ignoreUrlPatternMatcherStrategy() {
         def strat = new RegexListUrlPatternMatcherStrategy()
-        strat.setPattern(casClientProperties.uriExclusionFilterPattern.join(','))
+        strat.setPattern((coreAuthProperties.uriExclusionFilterPattern + casClientProperties.uriExclusionFilterPattern).join(','))
         return strat
     }
 
@@ -130,7 +133,7 @@ class AuthPluginConfig {
         frb.filter = new CooperatingFilterWrapper(new AuthenticationFilter(), AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = filterOrder() + 1
-        frb.urlPatterns = casClientProperties.uriFilterPattern
+        frb.urlPatterns = coreAuthProperties.uriFilterPattern ?: casClientProperties.uriFilterPattern
         frb.enabled = !frb.urlPatterns.empty
         frb.asyncSupported = true
         frb.initParameters = [(ConfigurationKeys.GATEWAY.name) : 'false']
@@ -161,10 +164,13 @@ class AuthPluginConfig {
         final name = 'CAS Cookie Authentication Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new AuthenticationFilter(), casClientProperties.authCookieName), AUTH_FILTER_KEY)
+        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new AuthenticationFilter(), coreAuthProperties.authCookieName ?: casClientProperties.authCookieName), AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = filterOrder() + 3
-        frb.urlPatterns = casClientProperties.authenticateOnlyIfCookieFilterPattern + casClientProperties.authenticateOnlyIfLoggedInPattern + casClientProperties.authenticateOnlyIfLoggedInFilterPattern
+        frb.urlPatterns = coreAuthProperties.optionalFilterPattern +
+                casClientProperties.authenticateOnlyIfCookieFilterPattern +
+                casClientProperties.authenticateOnlyIfLoggedInPattern +
+                casClientProperties.authenticateOnlyIfLoggedInFilterPattern
         frb.enabled = !frb.urlPatterns.empty
         frb.asyncSupported = true
         frb.initParameters = [(ConfigurationKeys.GATEWAY.name) : 'false']
@@ -178,7 +184,7 @@ class AuthPluginConfig {
         final name = 'CAS Gateway Cookie Authentication Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService), casClientProperties.authCookieName), AUTH_FILTER_KEY)
+        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(new UserAgentBypassFilterWrapper(new AuthenticationFilter(), userAgentFilterService), coreAuthProperties.authCookieName ?: casClientProperties.authCookieName), AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = filterOrder() + 4
         frb.urlPatterns = casClientProperties.gatewayIfCookieFilterPattern
@@ -226,7 +232,7 @@ class AuthPluginConfig {
                 casClientProperties.service,
                 casClientProperties.appServerName,
                 casClientProperties.loginUrl,
-                casClientProperties.authCookieName,
+                coreAuthProperties.authCookieName ?: casClientProperties.authCookieName,
                 casClientProperties.encodeServiceUrl,
                 casClientProperties.enabled,
                 casClientProperties.renew,

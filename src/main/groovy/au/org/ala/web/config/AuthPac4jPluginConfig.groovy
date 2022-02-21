@@ -2,9 +2,11 @@ package au.org.ala.web.config
 
 import au.org.ala.web.CasClientProperties
 import au.org.ala.web.CooperatingFilterWrapper
+import au.org.ala.web.CoreAuthProperties
 import au.org.ala.web.GrailsPac4jContextProvider
 import au.org.ala.web.IAuthService
 import au.org.ala.web.NotBotMatcher
+import au.org.ala.web.OidcClientProperties
 import au.org.ala.web.Pac4jAuthService
 import au.org.ala.web.Pac4jContextProvider
 import au.org.ala.web.Pac4jSSOStrategy
@@ -20,6 +22,7 @@ import org.pac4j.core.context.JEEContextFactory
 import org.pac4j.core.context.WebContextFactory
 import org.pac4j.core.context.session.JEESessionStore
 import org.pac4j.core.context.session.SessionStore
+import org.pac4j.core.http.url.DefaultUrlResolver
 import org.pac4j.core.matching.matcher.HeaderMatcher
 import org.pac4j.core.matching.matcher.PathMatcher
 import org.pac4j.core.util.Pac4jConstants
@@ -43,7 +46,7 @@ import static org.pac4j.core.authorization.authorizer.OrAuthorizer.or
 
 @CompileStatic
 @Configuration("authPac4jPluginConfiguration")
-@EnableConfigurationProperties(CasClientProperties)
+@EnableConfigurationProperties([CasClientProperties, OidcClientProperties, CoreAuthProperties])
 @Slf4j
 class AuthPac4jPluginConfig {
 
@@ -59,6 +62,10 @@ class AuthPac4jPluginConfig {
 
     @Autowired
     CasClientProperties casClientProperties
+    @Autowired
+    CoreAuthProperties coreAuthProperties
+    @Autowired
+    OidcClientProperties oidcClientProperties
 
     @Autowired
     GrailsApplication grailsApplication
@@ -72,49 +79,45 @@ class AuthPac4jPluginConfig {
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
     @Bean
     OidcConfiguration oidcConfiguration() {
-        def clientId = grailsApplication.config.getProperty("security.oidc.clientId")
-        def secret = grailsApplication.config.getProperty("security.oidc.secret")
-        def discoveryUri = grailsApplication.config.getProperty("security.oidc.discoveryUri")
-        def scope = grailsApplication.config.getProperty("security.oidc.scope") ?: 'openid email roles'
+        OidcConfiguration config = generateBaseOidcClient()
+        return config
+    }
 
+    private OidcConfiguration generateBaseOidcClient() {
         OidcConfiguration config = new OidcConfiguration()
-        config.setClientId(clientId)
-        config.setSecret(secret)
-        config.setDiscoveryURI(discoveryUri)
-        config.setScope(scope)
+        config.setClientId(oidcClientProperties.clientId)
+        config.setSecret(oidcClientProperties.secret)
+        config.setDiscoveryURI(oidcClientProperties.discoveryUri)
+        config.setScope(oidcClientProperties.scope)
+        config.setWithState(oidcClientProperties.withState)
+        config.customParams.putAll(oidcClientProperties.customParams)
+        if (oidcClientProperties.clientAuthenticationMethod) {
+            config.setClientAuthenticationMethodAsString(oidcClientProperties.clientAuthenticationMethod)
+        }
         // select display mode: page, popup, touch, and wap
 //        config.addCustomParam("display", "popup");
         // select prompt mode: none, consent, select_account
 //        config.addCustomParam("prompt", "none");
-        return config
+        config
     }
 
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
     @Bean
     OidcClient oidcClient(OidcConfiguration oidcConfiguration) {
         def client = new OidcClient(oidcConfiguration)
+        client.setUrlResolver(new DefaultUrlResolver(true))
         client.setName(DEFAULT_CLIENT)
         client
     }
 
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
     @Bean
-    OidcClient oidcPromptNoneClient(OidcConfiguration oidcConfiguration) {
-        def clientId = grailsApplication.config.getProperty("security.oidc.clientId")
-        def secret = grailsApplication.config.getProperty("security.oidc.secret")
-        def discoveryUri = grailsApplication.config.getProperty("security.oidc.discoveryUri")
-        def scope = grailsApplication.config.getProperty("security.oidc.scope") ?: 'openid email roles'
-
-        OidcConfiguration config = new OidcConfiguration()
-        config.setClientId(clientId)
-        config.setSecret(secret)
-        config.setDiscoveryURI(discoveryUri)
-        config.setScope(scope)
+    OidcClient oidcPromptNoneClient() {
+        def config = generateBaseOidcClient()
         // select prompt mode: none, consent, select_account
         config.addCustomParam("prompt", "none")
-        // select display mode: page, popup, touch, and wap
-//        config.addCustomParam("display", "popup");
         def client = new OidcClient(config)
+        client.setUrlResolver(new DefaultUrlResolver(true))
         client.setName(PROMPT_NONE_CLIENT)
         return client
     }
@@ -148,10 +151,10 @@ class AuthPac4jPluginConfig {
         config.webContextFactory = webContextFactory
         config.addAuthorizer(IS_AUTHENTICATED, isAuthenticated())
         config.addAuthorizer(ALLOW_ALL, or(isAuthenticated(), isAnonymous()))
-        config.addMatcher(ALA_COOKIE_MATCHER, new HeaderMatcher(casClientProperties.authCookieName,".*"))
+        config.addMatcher(ALA_COOKIE_MATCHER, new HeaderMatcher(coreAuthProperties.authCookieName ?: casClientProperties.authCookieName,".*"))
         config.addMatcher("notBotMatcher", new NotBotMatcher(userAgentFilterService))
         def excludeMatcher = new PathMatcher()
-        casClientProperties.uriExclusionFilterPattern.each {
+        (coreAuthProperties.uriExclusionFilterPattern + casClientProperties.uriExclusionFilterPattern).each {
             if (!it.startsWith("^")) {
                 it = '^' + it
             }
@@ -212,7 +215,7 @@ class AuthPac4jPluginConfig {
         frb.filter = securityFilter
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder() + 1
-        frb.urlPatterns = casClientProperties.uriFilterPattern
+        frb.urlPatterns = coreAuthProperties.uriFilterPattern ?: casClientProperties.uriFilterPattern
         frb.enabled = !frb.urlPatterns.empty
         frb.asyncSupported = true
         logFilter(name, frb)
@@ -233,7 +236,8 @@ class AuthPac4jPluginConfig {
         frb.filter = new CooperatingFilterWrapper(securityFilter, AuthPluginConfig.AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder() + 2
-        frb.urlPatterns = casClientProperties.authenticateOnlyIfCookieFilterPattern +
+        frb.urlPatterns = coreAuthProperties.optionalFilterPattern +
+                casClientProperties.authenticateOnlyIfCookieFilterPattern +
                 casClientProperties.authenticateOnlyIfLoggedInFilterPattern +
                 casClientProperties.authenticateOnlyIfLoggedInPattern
         frb.enabled = !frb.urlPatterns.empty

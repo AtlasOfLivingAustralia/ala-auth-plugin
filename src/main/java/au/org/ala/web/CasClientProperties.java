@@ -30,6 +30,7 @@ public class CasClientProperties {
     private boolean encodeServiceUrl = true;
     private boolean bypass = false;
     private String contextPath = null;
+    @Deprecated
     private String authCookieName = "ALA-Auth";
 
     public String getAppServerName() {
