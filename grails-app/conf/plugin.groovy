@@ -6,6 +6,9 @@ userDetails {
     readTimeout = 0 // disable read timeouts for user details because some services are slooooow...
 }
 security {
+    core {
+        permissionsAttributes = ['scopes']
+    }
     oidc {
         enabled = false
         clientId = 'ChangeMe'

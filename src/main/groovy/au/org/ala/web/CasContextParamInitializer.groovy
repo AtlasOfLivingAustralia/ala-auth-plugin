@@ -46,7 +46,7 @@ class CasContextParamInitializer implements ServletContextInitializer {
         }
         servletContext.setInitParameter(CAS_SERVER_URL_PREFIX.name, casClientProperties.casServerUrlPrefix)
         servletContext.setInitParameter(CAS_SERVER_LOGIN_URL.name, casClientProperties.loginUrl)
-        servletContext.setInitParameter(ROLE_ATTRIBUTE.name, casClientProperties.roleAttribute)
+        servletContext.setInitParameter(ROLE_ATTRIBUTE.name, coreAuthProperties.roleAttribute ?: casClientProperties.roleAttribute)
         servletContext.setInitParameter(IGNORE_PATTERN.name, (coreAuthProperties.uriExclusionFilterPattern + casClientProperties.uriExclusionFilterPattern).join(','))
         servletContext.setInitParameter(IGNORE_URL_PATTERN_TYPE.name, RegexListUrlPatternMatcherStrategy.name)
 

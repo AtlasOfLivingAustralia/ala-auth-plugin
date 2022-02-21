@@ -8,6 +8,8 @@ import java.util.List;
 @ConfigurationProperties(value = "security.core")
 public class CoreAuthProperties {
     private String authCookieName;
+    private String roleAttribute;
+    private List<String> permissionAttributes = new ArrayList<>();
 
     private List<String> uriFilterPattern = new ArrayList<>();
     private List<String> optionalFilterPattern = new ArrayList<>();
@@ -43,5 +45,21 @@ public class CoreAuthProperties {
 
     public void setUriExclusionFilterPattern(List<String> uriExclusionFilterPattern) {
         this.uriExclusionFilterPattern = uriExclusionFilterPattern;
+    }
+
+    public String getRoleAttribute() {
+        return roleAttribute;
+    }
+
+    public void setRoleAttribute(String roleAttribute) {
+        this.roleAttribute = roleAttribute;
+    }
+
+    public List<String> getPermissionAttributes() {
+        return permissionAttributes;
+    }
+
+    public void setPermissionAttributes(List<String> permissionAttributes) {
+        this.permissionAttributes = permissionAttributes;
     }
 }

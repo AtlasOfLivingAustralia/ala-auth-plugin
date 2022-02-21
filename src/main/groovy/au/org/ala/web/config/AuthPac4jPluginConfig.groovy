@@ -13,8 +13,11 @@ import au.org.ala.web.Pac4jSSOStrategy
 import au.org.ala.web.SSOStrategy
 import au.org.ala.web.UserAgentFilterService
 import grails.core.GrailsApplication
+import grails.web.mapping.LinkGenerator
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
+import org.pac4j.core.authorization.generator.DefaultRolesPermissionsAuthorizationGenerator
+import org.pac4j.core.authorization.generator.FromAttributesAuthorizationGenerator
 import org.pac4j.core.client.Clients
 import org.pac4j.core.client.direct.AnonymousClient
 import org.pac4j.core.config.Config
@@ -68,6 +71,9 @@ class AuthPac4jPluginConfig {
     OidcClientProperties oidcClientProperties
 
     @Autowired
+    LinkGenerator linkGenerator
+
+    @Autowired
     GrailsApplication grailsApplication
 
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
@@ -94,6 +100,9 @@ class AuthPac4jPluginConfig {
         if (oidcClientProperties.clientAuthenticationMethod) {
             config.setClientAuthenticationMethodAsString(oidcClientProperties.clientAuthenticationMethod)
         }
+        if (oidcClientProperties.allowUnsignedIdTokens) {
+            config.allowUnsignedIdTokens = oidcClientProperties.allowUnsignedIdTokens
+        }
         // select display mode: page, popup, touch, and wap
 //        config.addCustomParam("display", "popup");
         // select prompt mode: none, consent, select_account
@@ -105,6 +114,8 @@ class AuthPac4jPluginConfig {
     @Bean
     OidcClient oidcClient(OidcConfiguration oidcConfiguration) {
         def client = new OidcClient(oidcConfiguration)
+        client.addAuthorizationGenerator(new FromAttributesAuthorizationGenerator([coreAuthProperties.roleAttribute ?: casClientProperties.roleAttribute],coreAuthProperties.permissionAttributes))
+        client.addAuthorizationGenerator(new DefaultRolesPermissionsAuthorizationGenerator(['ROLE_USER'] , []))
         client.setUrlResolver(new DefaultUrlResolver(true))
         client.setName(DEFAULT_CLIENT)
         client
@@ -117,6 +128,8 @@ class AuthPac4jPluginConfig {
         // select prompt mode: none, consent, select_account
         config.addCustomParam("prompt", "none")
         def client = new OidcClient(config)
+        client.addAuthorizationGenerator(new FromAttributesAuthorizationGenerator([coreAuthProperties.roleAttribute ?: casClientProperties.roleAttribute],coreAuthProperties.permissionAttributes))
+        client.addAuthorizationGenerator(new DefaultRolesPermissionsAuthorizationGenerator(['ROLE_USER'] , []))
         client.setUrlResolver(new DefaultUrlResolver(true))
         client.setName(PROMPT_NONE_CLIENT)
         return client
@@ -143,7 +156,7 @@ class AuthPac4jPluginConfig {
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
     @Bean
     Config pac4jConfig(OidcClient oidcClient, SessionStore sessionStore, WebContextFactory webContextFactory, UserAgentFilterService userAgentFilterService) {
-        Clients clients = new Clients(CALLBACK_URI, oidcClient, new AnonymousClient())
+        Clients clients = new Clients(linkGenerator.link(absolute: true, uri: CALLBACK_URI), oidcClient, new AnonymousClient())
         Config config = new Config(clients)
         //config.addAuthorizer()
 //        config.addMatcher("", new Matcher()))
@@ -190,7 +203,8 @@ class AuthPac4jPluginConfig {
         final name = 'Pac4j Callback Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        CallbackFilter callbackFilter = new CallbackFilter(pac4jConfig, CALLBACK_URI)
+        // TODO Add config property for Default URI?
+        CallbackFilter callbackFilter = new CallbackFilter(pac4jConfig, linkGenerator.link(uri: '/'))
         frb.filter = callbackFilter
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder()
