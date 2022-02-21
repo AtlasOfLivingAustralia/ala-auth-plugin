@@ -1,24 +1,16 @@
 package au.org.ala.web
 
+import au.org.ala.grails.AnnotationMatcher
 import au.org.ala.web.config.AuthPluginConfig
 import grails.core.GrailsApplication
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
-import org.jasig.cas.client.Protocol
-import org.jasig.cas.client.authentication.AuthenticationFilter
-import org.jasig.cas.client.authentication.AuthenticationRedirectStrategy
-import org.jasig.cas.client.authentication.DefaultAuthenticationRedirectStrategy
-import org.jasig.cas.client.authentication.GatewayResolver
-import org.jasig.cas.client.authentication.UrlPatternMatcherStrategy
-import org.jasig.cas.client.util.CommonUtils
-import org.jasig.cas.client.validation.Assertion
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 
 import javax.annotation.PostConstruct
 import javax.servlet.http.Cookie
 import javax.servlet.http.HttpServletRequest
-import javax.servlet.http.HttpServletResponse
 
 @CompileStatic
 @Slf4j
@@ -60,15 +52,12 @@ class SsoInterceptor {
         if (request.getAttribute(AuthPluginConfig.AUTH_FILTER_KEY)) return true
 
         final result = AnnotationMatcher.getAnnotation(grailsApplication, controllerNamespace, controllerName, actionName, SSO, NoSSO)
-        final controllerAnnotation = result.controllerAnnotation
-        final actionAnnotation = result.actionAnnotation
+        final effectiveAnnotation = result.effectiveAnnotation()
         final actionNoSso = result.overrideAnnotation
 
         if (actionNoSso) return true
 
-        if (!controllerAnnotation && !actionAnnotation) return true
-
-        def effectiveAnnotation = result.effectiveAnnotation()
+        if (!effectiveAnnotation) return true
 
         if (effectiveAnnotation.cookie() && !cookieExists(request)) {
             log.debug("{}.{}.{} requested the presence of a {} cookie but none was found", controllerNamespace, controllerName, actionName, authCookieName)
