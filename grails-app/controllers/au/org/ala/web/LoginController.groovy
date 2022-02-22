@@ -24,7 +24,12 @@ class LoginController {
             path -= context
         }
 
+        def baseAbsUrl = linkGenerator.serverBaseURL
         def absPath = linkGenerator.link(absolute: true, uri: path)
+        if (!absPath.startsWith(baseAbsUrl)) {
+            log.error("Path param appears to redirect outside this app, path: {}, absPath: {}", path, absPath)
+            absPath = linkGenerator.link(absolute: true, uri: defaultRedirect)
+        }
         boolean auth = ssoStrategy.authenticate(request, response, false, absPath)
 
         if (!auth) {

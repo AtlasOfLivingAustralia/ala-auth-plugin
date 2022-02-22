@@ -186,7 +186,9 @@ class AuthPac4jPluginConfig {
         final name = 'Pac4j Logout Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
-        LogoutFilter logoutFilter = new LogoutFilter(pac4jConfig, linkGenerator.link(uri: coreAuthProperties.defaultLogoutRedirectUri))
+        // Redirect must be absolute for indirect client aka OIDC logout
+        def redirectUrl = linkGenerator.link(absolute: true, uri: coreAuthProperties.defaultLogoutRedirectUri)
+        LogoutFilter logoutFilter = new LogoutFilter(pac4jConfig, redirectUrl)
         logoutFilter.setLogoutUrlPattern(coreAuthProperties.logoutUrlPattern)
         logoutFilter.setCentralLogout(coreAuthProperties.centralLogout)
         logoutFilter.setDestroySession(coreAuthProperties.destroySession)
