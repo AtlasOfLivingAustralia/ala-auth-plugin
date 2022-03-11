@@ -1,10 +1,13 @@
 userDetails:
   url: 'https://auth.ala.org.au/userdetails/'
-  readTimeout: 0 // disable read timeouts for user details because some services are slooooow...
+  readTimeout: 0 # disable read timeouts for user details because some services are slooooow...
 #name:
 #main:
 #version:
 security:
+  core:
+    permissionsAttributes: ['scopes']
+    authCookieName: ${security.cas.authCookieName}
   oidc:
     enabled: false
     clientId: 'ChangeMe'

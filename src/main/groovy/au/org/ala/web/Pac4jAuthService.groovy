@@ -9,10 +9,29 @@ import org.springframework.beans.factory.annotation.Autowired
 class Pac4jAuthService implements IAuthService {
 
     // TODO Make these configurable?
+    // OIDC openid scope attrs
+    static final String ATTR_SUB = 'sub'
+    // OIDC email scope attrs
     static final String ATTR_EMAIL = 'email'
-    static final String ATTR_FIRST_NAME = 'firstname'
-    static final String ATTR_LAST_NAME = 'sn'
-    static final String ATTR_ROLES = 'role'
+    static final String ATTR_EMAIL_VERIFIED = 'email_verified'
+    // OIDC profile scope attrs
+    static final String ATTR_NAME = 'name'
+    static final String ATTR_FIRST_NAME = 'given_name'
+    static final String ATTR_MIDDLE_NAME = 'middle_name'
+    static final String ATTR_LAST_NAME = 'family_name'
+    static final String ATTR_NICKNAME = 'nickname'
+    static final String ATTR_PICTURE = 'picture'
+    static final String ATTR_UPDATED_AT = 'updated_at'
+
+    // fallback ALA CAS attributes
+    static final String ATTR_CAS_FIRST_NAME = 'firstname'
+    static final String ATTR_CAS_LAST_NAME = 'sn'
+
+    // ALA scoped attributes
+    static final String ATTR_ROLE = 'role'
+    static final String ATTR_ROLES = 'roles'
+
+    static final String ATTR_USERID = 'userid'
 
     @Autowired
     private final Config config
@@ -79,7 +98,8 @@ class Pac4jAuthService implements IAuthService {
             if (profile.isPresent()) {
                 def userProfile = profile.get()
                 if (userProfile) {
-                    value = userProfile.username
+                    // TODO try email before sub?
+                    value = userProfile.username ?: userProfile.getAttribute(ATTR_USERID) ?: userProfile.getAttribute(ATTR_SUB)
                 }
             }
         }
@@ -88,25 +108,28 @@ class Pac4jAuthService implements IAuthService {
 
     @Override
     String getDisplayName() {
-        String firstname = getAttribute(ATTR_FIRST_NAME)
-        String lastname = getAttribute(ATTR_LAST_NAME)
-        String displayName = ""
-        if (firstname && lastname) {
-            displayName = String.format("%s %s", firstname, lastname)
-        } else if (firstname || lastname) {
-            displayName = String.format("%s", firstname ?: lastname)
+        String displayName = getAttribute(ATTR_NAME)
+        if (!displayName) {
+            String firstname = getAttribute(ATTR_FIRST_NAME)
+            String lastname = getAttribute(ATTR_LAST_NAME)
+            if (firstname && lastname) {
+                displayName = String.format("%s %s", firstname, lastname)
+            } else if (firstname || lastname) {
+                displayName = String.format("%s", firstname ?: lastname)
+            }
+
         }
         return displayName
     }
 
     @Override
     String getFirstName() {
-        return getAttribute(ATTR_FIRST_NAME)
+        return getAttribute(ATTR_FIRST_NAME) ?: getAttribute(ATTR_CAS_FIRST_NAME)
     }
 
     @Override
     String getLastName() {
-        return getAttribute(ATTR_LAST_NAME)
+        return getAttribute(ATTR_LAST_NAME) ?: getAttribute(ATTR_CAS_LAST_NAME)
     }
 
     /**
@@ -118,9 +141,9 @@ class Pac4jAuthService implements IAuthService {
         def userProfile = userProfile
 
         if (userProfile != null) {
-            Object roles = userProfile.attributes.get(ATTR_ROLES);
+            Object roles = userProfile.attributes.get(ATTR_ROLES) ?: userProfile.attributes.get(ATTR_ROLE)
             if (roles instanceof Collection) {
-                return new HashSet<String>((Collection)roles);
+                return new HashSet<String>((Collection)roles)
             } else if (roles instanceof String) {
                 String rolesString = (String) roles
                 Set<String> retVal = new HashSet<String>()
@@ -147,10 +170,10 @@ class Pac4jAuthService implements IAuthService {
 
         if (attr) {
             details = new UserDetails(
-                    userId: attr?.userid?.toString(),
-                    userName: attr?.email?.toString()?.toLowerCase(),
-                    firstName: attr?.firstname?.toString() ?: "",
-                    lastName: attr?.lastname?.toString() ?: "",
+                    userId: userId?.toString(),
+                    userName: email?.toString()?.toLowerCase(),
+                    firstName: firstName?.toString() ?: "",
+                    lastName: lastName?.toString() ?: "",
                     locked: attr?.locked?.toBoolean() ?: false,
                     organisation: attr?.organisation?.toString() ?: "",
                     city: attr?.country?.toString() ?: "",

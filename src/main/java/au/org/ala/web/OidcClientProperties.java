@@ -17,6 +17,7 @@ public class OidcClientProperties {
     private Map<String,String> customParams = new LinkedHashMap<>();
     private String clientAuthenticationMethod = null;
     private boolean allowUnsignedIdTokens = false;
+    private boolean useAnonymousClient = true;
 
     public boolean isEnabled() {
         return enabled;
@@ -88,5 +89,13 @@ public class OidcClientProperties {
 
     public void setAllowUnsignedIdTokens(boolean allowUnsignedIdTokens) {
         this.allowUnsignedIdTokens = allowUnsignedIdTokens;
+    }
+
+    public boolean isUseAnonymousClient() {
+        return useAnonymousClient;
+    }
+
+    public void setUseAnonymousClient(boolean useAnonymousClient) {
+        this.useAnonymousClient = useAnonymousClient;
     }
 }

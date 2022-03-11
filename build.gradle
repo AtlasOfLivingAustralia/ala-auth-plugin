@@ -88,8 +88,7 @@ dependencies {
 
     compile 'org.pac4j:pac4j-oidc:5.3.1'
     compile 'org.pac4j:pac4j-jee:5.3.1'
-//    compile 'org.pac4j:jee-pac4j:5.3.1'
-    compile 'org.pac4j:jee-pac4j:6.0.0'
+    compile 'org.pac4j:jee-pac4j:6.1.0'
 
 //    compile 'org.pac4j:pac4j-oidc:4.5.4'
 ////    compile 'org.pac4j:pac4j-j2e:4.5.4'

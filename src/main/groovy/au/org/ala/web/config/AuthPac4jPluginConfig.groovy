@@ -1,6 +1,8 @@
 package au.org.ala.web.config
 
 import au.org.ala.web.CasClientProperties
+import au.org.ala.web.CookieFilterWrapper
+import au.org.ala.web.CookieMatcher
 import au.org.ala.web.CooperatingFilterWrapper
 import au.org.ala.web.CoreAuthProperties
 import au.org.ala.web.GrailsPac4jContextProvider
@@ -9,6 +11,7 @@ import au.org.ala.web.NotBotMatcher
 import au.org.ala.web.OidcClientProperties
 import au.org.ala.web.Pac4jAuthService
 import au.org.ala.web.Pac4jContextProvider
+import au.org.ala.web.Pac4jHttpServletRequestWrapperFilter
 import au.org.ala.web.Pac4jSSOStrategy
 import au.org.ala.web.SSOStrategy
 import au.org.ala.web.UserAgentFilterService
@@ -18,6 +21,7 @@ import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 import org.pac4j.core.authorization.generator.DefaultRolesPermissionsAuthorizationGenerator
 import org.pac4j.core.authorization.generator.FromAttributesAuthorizationGenerator
+import org.pac4j.core.client.Client
 import org.pac4j.core.client.Clients
 import org.pac4j.core.client.direct.AnonymousClient
 import org.pac4j.core.config.Config
@@ -40,6 +44,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
 
 import javax.servlet.DispatcherType
 
@@ -62,6 +67,7 @@ class AuthPac4jPluginConfig {
     static final String ALA_COOKIE_MATCHER = "alaCookieMatcher"
     static final String EXCLUDE_PATHS = "excludePaths"
     public static final String CALLBACK_URI = "/callback"
+    public static final String NOT_BOT_MATCHER = "notBotMatcher"
 
     @Autowired
     CasClientProperties casClientProperties
@@ -76,20 +82,20 @@ class AuthPac4jPluginConfig {
     @Autowired
     GrailsApplication grailsApplication
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     IAuthService delegateService(Config config, Pac4jContextProvider pac4jContextProvider, SessionStore sessionStore) {
         new Pac4jAuthService(config, pac4jContextProvider, sessionStore)
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     OidcConfiguration oidcConfiguration() {
-        OidcConfiguration config = generateBaseOidcClient()
+        OidcConfiguration config = generateBaseOidcClientConfiguration()
         return config
     }
 
-    private OidcConfiguration generateBaseOidcClient() {
+    private OidcConfiguration generateBaseOidcClientConfiguration() {
         OidcConfiguration config = new OidcConfiguration()
         config.setClientId(oidcClientProperties.clientId)
         config.setSecret(oidcClientProperties.secret)
@@ -110,8 +116,9 @@ class AuthPac4jPluginConfig {
         config
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
+    @Primary
     OidcClient oidcClient(OidcConfiguration oidcConfiguration) {
         def client = new OidcClient(oidcConfiguration)
         client.addAuthorizationGenerator(new FromAttributesAuthorizationGenerator([coreAuthProperties.roleAttribute ?: casClientProperties.roleAttribute],coreAuthProperties.permissionAttributes))
@@ -121,10 +128,10 @@ class AuthPac4jPluginConfig {
         client
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     OidcClient oidcPromptNoneClient() {
-        def config = generateBaseOidcClient()
+        def config = generateBaseOidcClientConfiguration()
         // select prompt mode: none, consent, select_account
         config.addCustomParam("prompt", "none")
         def client = new OidcClient(config)
@@ -135,37 +142,42 @@ class AuthPac4jPluginConfig {
         return client
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix='security.oidc', name=['enabled', 'useAnonymousClient'])
+    @Bean
+    Client anonymousClient() {
+        return AnonymousClient.INSTANCE
+    }
+
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     Pac4jContextProvider pac4jContextProvider(Config config) {
         new GrailsPac4jContextProvider(config)
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     SessionStore sessionStore() {
         JEESessionStore.INSTANCE
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     WebContextFactory webContextFactory() {
         JEEContextFactory.INSTANCE
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
-    Config pac4jConfig(OidcClient oidcClient, SessionStore sessionStore, WebContextFactory webContextFactory, UserAgentFilterService userAgentFilterService) {
-        Clients clients = new Clients(linkGenerator.link(absolute: true, uri: CALLBACK_URI), oidcClient, new AnonymousClient())
+    Config pac4jConfig(List<Client> clientBeans, SessionStore sessionStore, WebContextFactory webContextFactory, UserAgentFilterService userAgentFilterService) {
+        Clients clients = new Clients(linkGenerator.link(absolute: true, uri: CALLBACK_URI), clientBeans)
+
         Config config = new Config(clients)
-        //config.addAuthorizer()
-//        config.addMatcher("", new Matcher()))
         config.sessionStore = sessionStore
         config.webContextFactory = webContextFactory
         config.addAuthorizer(IS_AUTHENTICATED, isAuthenticated())
         config.addAuthorizer(ALLOW_ALL, or(isAuthenticated(), isAnonymous()))
-        config.addMatcher(ALA_COOKIE_MATCHER, new HeaderMatcher(coreAuthProperties.authCookieName ?: casClientProperties.authCookieName,".*"))
-        config.addMatcher("notBotMatcher", new NotBotMatcher(userAgentFilterService))
+        config.addMatcher(ALA_COOKIE_MATCHER, new CookieMatcher(coreAuthProperties.authCookieName ?: casClientProperties.authCookieName,".*"))
+        config.addMatcher(NOT_BOT_MATCHER, new NotBotMatcher(userAgentFilterService))
         def excludeMatcher = new PathMatcher()
         (coreAuthProperties.uriExclusionFilterPattern + casClientProperties.uriExclusionFilterPattern).each {
             if (!it.startsWith("^")) {
@@ -180,7 +192,7 @@ class AuthPac4jPluginConfig {
         config
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     FilterRegistrationBean pac4jLogoutFilter(Config pac4jConfig) {
         final name = 'Pac4j Logout Filter'
@@ -203,7 +215,7 @@ class AuthPac4jPluginConfig {
         return frb
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     FilterRegistrationBean pac4jCallbackFilter(Config pac4jConfig) {
         final name = 'Pac4j Callback Filter'
@@ -221,7 +233,7 @@ class AuthPac4jPluginConfig {
         return frb
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     FilterRegistrationBean pac4jUriFilter(Config pac4jConfig) {
 
@@ -229,10 +241,13 @@ class AuthPac4jPluginConfig {
         final name = 'Pac4j Security Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
+        def clients = oidcClientProperties.isUseAnonymousClient()
+                ? toStringParam(DEFAULT_CLIENT, AnonymousClient.class.name)
+                : toStringParam(DEFAULT_CLIENT)
         SecurityFilter securityFilter = new SecurityFilter(pac4jConfig,
-                toStringParam(AnonymousClient.class.name, DEFAULT_CLIENT),
+                clients,
                 IS_AUTHENTICATED, EXCLUDE_PATHS)
-        frb.filter = securityFilter
+        frb.filter = new CooperatingFilterWrapper(securityFilter, AuthPluginConfig.AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder() + 1
         frb.urlPatterns = coreAuthProperties.uriFilterPattern ?: casClientProperties.uriFilterPattern
@@ -242,17 +257,20 @@ class AuthPac4jPluginConfig {
         return frb
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
-    FilterRegistrationBean pac4jAuthOnlyIfFilter(Config pac4jConfig) {
+    FilterRegistrationBean pac4jOptionalFilter(Config pac4jConfig) {
 
-        // This filter will apply the uriFiltersPattern
+        // This filter will apply the optional auth filter patterns - will only SSO if a cookie is present
         final name = 'Pac4j Optional Security Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
+        def clients = oidcClientProperties.isUseAnonymousClient()
+                ? toStringParam(DEFAULT_CLIENT, AnonymousClient.class.name)
+                : toStringParam(DEFAULT_CLIENT)
         SecurityFilter securityFilter = new SecurityFilter(pac4jConfig,
-                toStringParam(AnonymousClient.class.name, DEFAULT_CLIENT),
-                ALLOW_ALL, toStringParam(ALA_COOKIE_MATCHER, EXCLUDE_PATHS))
+                clients,
+                IS_AUTHENTICATED, toStringParam(ALA_COOKIE_MATCHER, EXCLUDE_PATHS))
         frb.filter = new CooperatingFilterWrapper(securityFilter, AuthPluginConfig.AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder() + 2
@@ -266,22 +284,69 @@ class AuthPac4jPluginConfig {
         return frb
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     FilterRegistrationBean pac4jPromptNoneFilter(Config pac4jConfig) {
 
-        // This filter will apply the uriFiltersPattern
+        // This filter will apply the prompt=none filter patterns
         final name = 'Pac4j Prompt None Security Filter'
         def frb = new FilterRegistrationBean()
         frb.name = name
+        def clients = oidcClientProperties.isUseAnonymousClient()
+                ? toStringParam(PROMPT_NONE_CLIENT, AnonymousClient.class.name)
+                : toStringParam(PROMPT_NONE_CLIENT)
         SecurityFilter securityFilter = new SecurityFilter(pac4jConfig,
-                toStringParam(AnonymousClient.class.name, PROMPT_NONE_CLIENT),
-                ALLOW_ALL, EXCLUDE_PATHS)
+                clients,
+                ALLOW_ALL, toStringParam(NOT_BOT_MATCHER,EXCLUDE_PATHS))
         frb.filter = new CooperatingFilterWrapper(securityFilter, AuthPluginConfig.AUTH_FILTER_KEY)
         frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
         frb.order = AuthPluginConfig.filterOrder() + 3
-        frb.urlPatterns = casClientProperties.gatewayFilterPattern +
-                casClientProperties.gatewayIfCookieFilterPattern
+        frb.urlPatterns = casClientProperties.gatewayFilterPattern
+        frb.enabled = !frb.urlPatterns.empty
+        frb.asyncSupported = true
+        logFilter(name, frb)
+        return frb
+    }
+
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
+    @Bean
+    FilterRegistrationBean pac4jPromptNoneCookieFilter(Config pac4jConfig) {
+
+        // This filter will apply the prompt=none filter patterns if a cookie is present
+        final name = 'Pac4j Prompt None Cookie Security Filter'
+        def frb = new FilterRegistrationBean()
+        frb.name = name
+        def clients = oidcClientProperties.isUseAnonymousClient()
+                ? toStringParam(PROMPT_NONE_CLIENT, AnonymousClient.class.name)
+                : toStringParam(PROMPT_NONE_CLIENT)
+        SecurityFilter securityFilter = new SecurityFilter(pac4jConfig,
+                clients,
+                ALLOW_ALL, toStringParam(ALA_COOKIE_MATCHER, NOT_BOT_MATCHER, EXCLUDE_PATHS))
+        frb.filter = new CooperatingFilterWrapper(new CookieFilterWrapper(securityFilter, coreAuthProperties.authCookieName), AuthPluginConfig.AUTH_FILTER_KEY)
+        frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
+        frb.order = AuthPluginConfig.filterOrder() + 4
+        frb.urlPatterns = casClientProperties.gatewayIfCookieFilterPattern
+        frb.enabled = !frb.urlPatterns.empty
+        frb.asyncSupported = true
+        logFilter(name, frb)
+        return frb
+    }
+
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
+    @Bean
+    FilterRegistrationBean pac4jProfileFilter(Config pac4jConfig, SessionStore sessionStore, WebContextFactory webContextFactory) {
+
+        // This filter will apply to all requests but apply no SSO or authentication,
+        // only wrap the request in a pac4j request wrapper if profiles exist in the session
+        // Analogous to the CAS HttpServletRequestWrapperFilter
+        final name = 'Pac4j Existing Profiles Filter'
+        def frb = new FilterRegistrationBean()
+        frb.name = name
+        Pac4jHttpServletRequestWrapperFilter pac4jFilter = new Pac4jHttpServletRequestWrapperFilter(pac4jConfig, sessionStore, webContextFactory)
+        frb.filter = pac4jFilter
+        frb.dispatcherTypes = EnumSet.of(DispatcherType.REQUEST)
+        frb.order = AuthPluginConfig.filterOrder() + 5
+        frb.urlPatterns = ['/*']
         frb.enabled = !frb.urlPatterns.empty
         frb.asyncSupported = true
         logFilter(name, frb)
@@ -298,12 +363,12 @@ class AuthPac4jPluginConfig {
         }
     }
 
-    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled', matchIfMissing = false)
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
     @Bean
     SSOStrategy ssoStrategy(Config config) {
         new Pac4jSSOStrategy(config, null,
-                toStringParam(AnonymousClient.class.name, DEFAULT_CLIENT),
-                toStringParam(AnonymousClient.class.name, PROMPT_NONE_CLIENT),
+                oidcClientProperties.isUseAnonymousClient() ? toStringParam(AnonymousClient.class.name, DEFAULT_CLIENT) : DEFAULT_CLIENT,
+                oidcClientProperties.isUseAnonymousClient() ? toStringParam(AnonymousClient.class.name, PROMPT_NONE_CLIENT) : PROMPT_NONE_CLIENT,
                 IS_AUTHENTICATED, ALLOW_ALL,
                 "")
     }
