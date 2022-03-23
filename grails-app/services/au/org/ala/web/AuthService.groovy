@@ -3,6 +3,11 @@ package au.org.ala.web
 import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.userdetails.UserDetailsFromIdListRequest
 import grails.plugin.cache.Cacheable
+import grails.web.mapping.LinkGenerator
+import org.springframework.beans.factory.annotation.Autowired
+
+import javax.servlet.http.HttpServletRequest
+import java.net.http.HttpRequest
 
 class AuthService implements IAuthService {
 
@@ -13,6 +18,9 @@ class AuthService implements IAuthService {
     UserDetailsClient userDetailsClient
     // Delegate the auth service implementation to one for our auth config
     IAuthService delegateService
+
+    @Autowired
+    LinkGenerator linkGenerator
 
     String getEmail() {
         delegateService.getEmail()
@@ -40,6 +48,20 @@ class AuthService implements IAuthService {
 
     UserDetails userDetails() {
         delegateService.userDetails()
+    }
+
+    String loginUrl(String path) {
+
+
+        linkGenerator.link(mapping:'login', params: [ path: path ] )
+    }
+
+    String loginUrl(HttpServletRequest request) {
+
+        def requestPath = request.forwardURI ? ((request.forwardURI.startsWith('/') ? '' : '/') + request.forwardURI) : ''
+        def requestQuery = request.queryString ? (request.queryString.startsWith('?') ? '' : '?') + request.queryString : ''
+
+        linkGenerator.link(mapping:'login', params: [ path: "${requestPath}${requestQuery}" ])
     }
 
     @Cacheable("userDetailsCache")
