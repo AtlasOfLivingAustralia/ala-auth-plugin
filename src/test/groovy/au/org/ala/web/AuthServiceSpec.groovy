@@ -6,7 +6,6 @@ import grails.testing.services.ServiceUnitTest
 import retrofit2.mock.Calls
 import spock.lang.Specification
 
-
 class AuthServiceSpec extends Specification implements ServiceUnitTest<AuthService> {
 
     def setup() {

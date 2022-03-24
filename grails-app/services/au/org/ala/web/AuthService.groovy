@@ -4,10 +4,8 @@ import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.userdetails.UserDetailsFromIdListRequest
 import grails.plugin.cache.Cacheable
 import grails.web.mapping.LinkGenerator
-import org.springframework.beans.factory.annotation.Autowired
 
 import javax.servlet.http.HttpServletRequest
-import java.net.http.HttpRequest
 
 class AuthService implements IAuthService {
 
@@ -18,8 +16,6 @@ class AuthService implements IAuthService {
     UserDetailsClient userDetailsClient
     // Delegate the auth service implementation to one for our auth config
     IAuthService delegateService
-
-    @Autowired
     LinkGenerator linkGenerator
 
     String getEmail() {
