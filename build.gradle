@@ -10,10 +10,6 @@ buildscript {
     }
 }
 
-plugins {
-    id "net.ltgt.apt" version "0.21"
-}
-
 apply plugin:"eclipse"
 apply plugin:"idea"
 apply plugin:"org.grails.grails-plugin"
