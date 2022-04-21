@@ -51,9 +51,7 @@ class AuthService implements IAuthService {
     }
 
     String loginUrl(String path) {
-
-
-        linkGenerator.link(mapping:'login', params: [ path: path ] )
+        delegateService.loginUrl(path)
     }
 
     String loginUrl(HttpServletRequest request) {
@@ -61,7 +59,7 @@ class AuthService implements IAuthService {
         def requestPath = request.forwardURI ? ((request.forwardURI.startsWith('/') ? '' : '/') + request.forwardURI) : ''
         def requestQuery = request.queryString ? (request.queryString.startsWith('?') ? '' : '?') + request.queryString : ''
 
-        linkGenerator.link(mapping:'login', params: [ path: "${requestPath}${requestQuery}" ])
+        loginUrl("${requestPath}${requestQuery}")
     }
 
     @Cacheable("userDetailsCache")

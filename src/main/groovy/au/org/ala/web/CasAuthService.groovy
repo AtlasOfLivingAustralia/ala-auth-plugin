@@ -4,6 +4,7 @@ import au.org.ala.cas.util.AuthenticationUtils
 import au.org.ala.userdetails.UserDetailsClient
 import groovy.util.logging.Slf4j
 import org.springframework.web.context.request.RequestContextHolder
+import org.springframework.web.util.UriComponentsBuilder
 
 import javax.servlet.http.HttpServletRequest
 
@@ -15,10 +16,12 @@ class CasAuthService implements IAuthService {
 
     private UserDetailsClient userDetailsClient
     private boolean casBypass
+    private String casLoginUrl
 
-    CasAuthService(UserDetailsClient userDetailsClient, boolean casBypass) {
+    CasAuthService(UserDetailsClient userDetailsClient, boolean casBypass, String casLoginUrl) {
         this.casBypass = casBypass
         this.userDetailsClient = userDetailsClient
+        this.casLoginUrl = casLoginUrl
     }
 
     String getEmail() {
@@ -83,6 +86,13 @@ class CasAuthService implements IAuthService {
         }
 
         details
+    }
+
+    @Override
+    String loginUrl(String returnUrl) {
+        def builder = UriComponentsBuilder.fromHttpUrl(casLoginUrl)
+        builder.queryParam('service', returnUrl)
+        return builder.build(true).toUriString()
     }
 
     /**

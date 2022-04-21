@@ -58,7 +58,7 @@ class AuthPluginConfig {
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)
     @Bean
     IAuthService delegateService(UserDetailsClient userDetailsClient) {
-        new CasAuthService(userDetailsClient, casClientProperties.bypass)
+        new CasAuthService(userDetailsClient, casClientProperties.bypass, casClientProperties.loginUrl)
     }
 
     @ConditionalOnProperty(prefix= 'security.cas', name='enabled', matchIfMissing = true)

@@ -1,5 +1,6 @@
 package au.org.ala.web
 
+import grails.web.mapping.LinkGenerator
 import org.pac4j.core.config.Config
 import org.pac4j.core.context.session.SessionStore
 import org.pac4j.core.profile.ProfileManager
@@ -42,10 +43,14 @@ class Pac4jAuthService implements IAuthService {
     @Autowired
     private final SessionStore sessionStore
 
-    Pac4jAuthService(Config config, Pac4jContextProvider pac4jContextProvider, SessionStore sessionStore) {
+    @Autowired
+    private final LinkGenerator grailsLinkGenerator
+
+    Pac4jAuthService(Config config, Pac4jContextProvider pac4jContextProvider, SessionStore sessionStore, LinkGenerator grailsLinkGenerator) {
         this.config = config
         this.pac4jContextProvider = pac4jContextProvider
         this.sessionStore = sessionStore
+        this.grailsLinkGenerator = grailsLinkGenerator
     }
 
     ProfileManager getProfileManager() {
@@ -186,5 +191,8 @@ class Pac4jAuthService implements IAuthService {
         details
     }
 
-
+    @Override
+    String loginUrl(String returnUrl) {
+        return grailsLinkGenerator.link(mapping:'login', params: [path: returnUrl])
+    }
 }

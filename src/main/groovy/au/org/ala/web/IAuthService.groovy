@@ -48,4 +48,10 @@ interface IAuthService {
     UserDetails userDetails()
 
 
+    /**
+     * Get the login URL for the current auth service
+     * @param returnUrl The url to return to.
+     * @return The login url
+     */
+    String loginUrl(String returnUrl)
 }
