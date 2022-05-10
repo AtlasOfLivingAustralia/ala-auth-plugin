@@ -2,6 +2,7 @@ package au.org.ala.web
 
 import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.userdetails.UserDetailsFromIdListRequest
+import au.org.ala.userdetails.UserDetailsFromIdListResponse
 import grails.plugin.cache.Cacheable
 import grails.web.mapping.LinkGenerator
 import org.springframework.beans.factory.annotation.Autowired
@@ -62,25 +63,28 @@ class AuthService implements IAuthService {
         loginUrl("${requestPath}${requestQuery}")
     }
 
-    @Cacheable("userDetailsCache")
     UserDetails getUserForUserId(String userId, boolean includeProps = true) {
-        if (!userId) return null // this would have failed anyway
+        return getUserForUserIdInternal(userId, includeProps).orElse(null)
+    }
+
+    @Cacheable("userDetailsCache")
+    Optional<UserDetails> getUserForUserIdInternal(String userId, boolean includeProps = true) {
+        if (!userId) return Optional.empty() // this would have failed anyway
         def call = userDetailsClient.getUserDetails(userId, includeProps)
         try {
             def response = call.execute()
 
             if (response.successful) {
-                return response.body()
+                return Optional.of(response.body())
             } else {
                 log.warn("Failed to retrieve user details for userId: $userId, includeProps: $includeProps. Error was: ${response.message()}")
             }
         } catch (Exception ex) {
             log.error("Exception caught trying get find user details for $userId.", ex)
         }
-        return null
+        return Optional.empty()
     }
 
-    @Cacheable("userDetailsCache")
     UserDetails getUserForEmailAddress(String emailAddress, boolean includeProps = true) {
         // The user details service lookup service should accept either a numerical id or email address and respond appropriately
         return getUserForUserId(emailAddress, includeProps)
@@ -106,20 +110,24 @@ class AuthService implements IAuthService {
      * @param userIds
      * @return
      */
-    @Cacheable("userDetailsByIdCache")
     def getUserDetailsById(List<String> userIds, boolean includeProps = true) {
+        return getUserDetailsByIdInternal(userIds, includeProps).orElse(null)
+    }
+
+    @Cacheable("userDetailsByIdCache")
+    Optional<UserDetailsFromIdListResponse> getUserDetailsByIdInternal(List<String> userIds, boolean includeProps = true) {
         def call = userDetailsClient.getUserDetailsFromIdList(new UserDetailsFromIdListRequest(userIds, includeProps))
         try {
             def response = call.execute()
             if (response.successful) {
-                return response.body()
+                return Optional.of(response.body())
             } else {
                 log.warn("Failed to retrieve user details. Error was: ${response.message()}")
             }
         } catch (Exception e) {
             log.error("Exception caught retrieving userdetails for ${userIds}", e)
         }
-        return null
+        return Optional.empty()
     }
 
     /**
