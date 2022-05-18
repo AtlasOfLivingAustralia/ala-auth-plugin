@@ -42,7 +42,7 @@ class Pac4jHttpServletRequestWrapperFilter extends AbstractConfigFilter {
 
         def existing = WebUtils.getNativeRequest(request, Pac4JHttpServletRequestWrapper)
         def profiles = profileManager.getProfiles()
-        chain.doFilter(existing != null && profiles
+        chain.doFilter(existing == null && profiles
                 ? new Pac4JHttpServletRequestWrapper(request, profiles)
                 : request, response)
     }
