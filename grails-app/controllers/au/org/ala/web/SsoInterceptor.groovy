@@ -48,7 +48,7 @@ class SsoInterceptor {
     }
 
     boolean before() {
-        if (!enabled || oidcEnabled) return true
+        if (!(enabled || oidcEnabled)) return true
         if (request.getAttribute(AuthPluginConfig.AUTH_FILTER_KEY)) return true
 
         final result = AnnotationMatcher.getAnnotation(grailsApplication, controllerNamespace, controllerName, actionName, SSO, NoSSO)
