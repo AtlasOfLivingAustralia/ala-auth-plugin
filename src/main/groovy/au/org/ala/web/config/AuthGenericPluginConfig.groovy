@@ -1,7 +1,9 @@
 package au.org.ala.web.config
 
+import au.org.ala.oidc.TokenClient
 import au.org.ala.userdetails.UserDetailsClient
 import au.org.ala.web.CasClientProperties
+import au.org.ala.web.OidcClientProperties
 import au.org.ala.web.UserAgentFilterService
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Rfc3339DateJsonAdapter
@@ -10,10 +12,14 @@ import groovy.json.JsonSlurper
 import groovy.transform.CompileDynamic
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import org.pac4j.core.client.DirectClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -33,9 +39,15 @@ class AuthGenericPluginConfig {
 
     @ConditionalOnMissingBean(name = "userDetailsHttpClient")
     @Bean(name = ["defaultUserDetailsHttpClient", "userDetailsHttpClient"])
-    OkHttpClient userDetailsHttpClient() {
+    OkHttpClient userDetailsHttpClient(@Qualifier('userDetailsBearerTokenInterceptor') @Autowired(required = false) Interceptor userDetailsBearerTokenInterceptor) {
         Integer readTimeout = grailsApplication.config['userDetails']['readTimeout'] as Integer
-        new OkHttpClient.Builder().readTimeout(readTimeout, MILLISECONDS).build()
+        def client = new OkHttpClient.Builder().tap {
+            readTimeout(readTimeout, MILLISECONDS)
+            if (userDetailsBearerTokenInterceptor) {
+                addInterceptor(userDetailsBearerTokenInterceptor)
+            }
+        }.build()
+        return client
     }
 
     @ConditionalOnMissingBean(name = "userDetailsMoshi")

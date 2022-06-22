@@ -1,5 +1,6 @@
 package au.org.ala.web.config
 
+import au.org.ala.oidc.TokenClient
 import au.org.ala.web.CasClientProperties
 import au.org.ala.web.CookieFilterWrapper
 import au.org.ala.web.CookieMatcher
@@ -19,6 +20,8 @@ import grails.core.GrailsApplication
 import grails.web.mapping.LinkGenerator
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
+import okhttp3.Interceptor
+import okhttp3.Response
 import org.pac4j.core.authorization.generator.DefaultRolesPermissionsAuthorizationGenerator
 import org.pac4j.core.authorization.generator.FromAttributesAuthorizationGenerator
 import org.pac4j.core.client.Client
@@ -39,6 +42,7 @@ import org.pac4j.jee.filter.SecurityFilter
 import org.pac4j.oidc.client.OidcClient
 import org.pac4j.oidc.config.OidcConfiguration
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
@@ -146,6 +150,30 @@ class AuthPac4jPluginConfig {
     @Bean
     Client anonymousClient() {
         return AnonymousClient.INSTANCE
+    }
+
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
+    @ConditionalOnMissingBean(name = "userDetailsBearerTokenInterceptor")
+    @Bean(name = ["defaultUserDetailsBearerTokenInterceptor", "userDetailsBearerTokenInterceptor"])
+    Interceptor userDetailsBearerTokenInterceptor(@Autowired TokenClient tokenClient) {
+        new Interceptor() {
+            @Override
+            Response intercept(Interceptor.Chain chain) throws IOException {
+                return chain.proceed(
+                        chain.request().newBuilder()
+                                .addHeader("Authorization", "Bearer " + tokenClient.getTokens().accessToken.toAuthorizationHeader())
+                                .build()
+                )
+            }
+        }
+    }
+
+    @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
+    @ConditionalOnMissingBean(name = "userDetailsTokenClient")
+    @Bean(name = ["defaultUserDetailsTokenClient", "userDetailsTokenClient"])
+    TokenClient userDetailsTokenClient(OidcConfiguration oidcConfiguration) {
+        def tokenEndpoint = oidcConfiguration.findProviderMetadata().getTokenEndpointURI()
+        new TokenClient(tokenEndpoint, oidcClientProperties.clientId, oidcClientProperties.secret)
     }
 
     @ConditionalOnProperty(prefix= 'security.oidc', name='enabled')
