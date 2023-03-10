@@ -1,3 +1,5 @@
+# THIS REPO IS NOW ARCHIVED.  THE ACTIVE PLUGIN DEVELOPMENT HAPPENS IN [ala-security-project](https://github.com/AtlasOfLivingAustralia/ala-security-project)
+
 # ala-auth-plugin [![Build Status](https://travis-ci.org/AtlasOfLivingAustralia/ala-auth-plugin.svg?branch=master)](https://travis-ci.org/AtlasOfLivingAustralia/ala-auth-plugin)
 ## Usage
 ```
